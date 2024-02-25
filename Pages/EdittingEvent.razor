@@ -1,0 +1,97 @@
+﻿@page "/edittingEvent"
+@using Shedule.Data
+@using System.ComponentModel.DataAnnotations
+@using Shedule.Models
+
+<PageTitle>EdittingEventsDae</PageTitle>
+
+
+@inject IDeliveryEvent ThisDeliveryEvent
+@inject ILogger<Index> Logger
+
+<h2>Перенос даты доставки</h2>
+
+<hr />
+
+<table border="0" cellpadding="10">
+	<tr><td>Название точки:</td><td>@_point</td></tr>
+	<tr><td>Покупатель:</td><td>@_customer</td></tr>
+	<tr><td>Адрес:</td><td>@_adress</td></tr>
+	<tr>
+		<td>Новая дата:</td>		
+		<td>
+			<InputDate @bind-Value="_date" class="form-control" @onclick="RefreshMessageText"></InputDate>
+		</td>		
+	</tr>
+	<tr>
+		<td>Статус:</td>
+		<td>
+			<InputSelect @bind-Value="_isRelevant" class="form-control" @onclick="RefreshMessageText">
+				<option value="true">актуальна</option>
+				<option value="false">отменить</option>
+			</InputSelect>
+		</td>
+	</tr>
+	<tr>
+		<td>Статус доставки:</td>
+		<td>
+			<InputSelect @bind-Value="_isDone" class="form-control" @onclick="RefreshMessageText">
+				<option value="true">доставлена</option>
+				<option value="false">не доставлена</option>
+			</InputSelect>
+		</td>
+	</tr>
+	
+</table>
+<div>@_message_text</div>
+
+<br />
+<td><button @onclick="EditEvent"> сохранить </button></td>
+
+<hr />
+
+<a href="points">Вернуться к списку</a>
+
+
+@code {
+	[Parameter]
+	[SupplyParameterFromQuery]
+	public int id { get; set; }
+
+	private DeliveryEvent? _event;
+	private string _point;
+	private string _customer;
+	private string _adress;
+	private DateTime _date;
+	private bool _isRelevant;
+	private bool _isDone;
+	string _message_text;
+
+	protected override async Task OnInitializedAsync()
+	{
+		
+		Logger.LogWarning("Before: {ThreadId}", Environment.CurrentManagedThreadId.ToString()); 
+		_event = await ThisDeliveryEvent.GetById(id);
+		_point = _event.EventPoint.PointName;
+		_customer = _event.EventPoint.ThisCustomer.CustomerName;
+		_adress = _event.EventPoint.Adress;
+		_date = _event.EventDeliveryDate;
+		_isRelevant = _event.IsRelevant;
+		_isDone = _event.IsDone;
+	}
+
+	private async Task EditEvent()
+	{
+		Logger.LogWarning("Before: {ThreadId}", Environment.CurrentManagedThreadId.ToString());
+		_event.EventDeliveryDate = _date;
+		_event.IsRelevant = _isRelevant;
+		_event.IsDone = _isDone;
+		await ThisDeliveryEvent.Update(_event);
+		_message_text = "Изменения сохранены.";
+	}
+
+	private void RefreshMessageText()
+	{
+		_message_text = "";
+	}
+}

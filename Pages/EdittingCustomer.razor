@@ -1,0 +1,88 @@
+﻿@page "/edittingcustomer"
+@using Shedule.Data
+@using System.ComponentModel.DataAnnotations
+@using Shedule.Models
+
+<PageTitle>EdittingCustomers</PageTitle>
+
+@inject ICustomer Customer
+@inject ILogger<Index> Logger
+
+<h2>Редактирование покупателя</h2>
+
+<hr />
+
+<EditForm Model="_model" OnValidSubmit="ProcessValidForm">
+	<DataAnnotationsValidator />
+
+	<table border="0" cellpadding="10">
+		<tr><td>Название:</td><td><InputText @bind-Value="_model.Name" @onclick="RefreshMessageText"/></td></tr>
+		<tr>
+			<td>Наличие ПДЗ:</td>
+			<td>
+				<InputSelect @bind-Value="_model.IsDebtor" class="form-control">
+					<option value="true">имеется задолженность</option>
+					<option value="false">нет задолженности</option>
+				</InputSelect>
+			</td>
+		</tr>
+	</table>
+	<div class="add_customer_div">@_message_text</div>
+
+	<br /> <input type="submit" value="Сохранить">
+	<ValidationSummary />
+</EditForm>
+
+<hr />
+
+<a href="customers">Вернуться к списку</a>
+
+
+@code {
+	[Parameter]
+	[SupplyParameterFromQuery]
+	public int id { get; set; }
+
+	private IReadOnlyCollection<Customer>? _сustomers;
+	private string _customerName;
+	private Customer ThisCustomer;
+	private string _message_text;
+
+	protected override async Task OnInitializedAsync()
+	{
+
+		Logger.LogWarning("Before: {ThreadId}", Environment.CurrentManagedThreadId.ToString()); 
+		if (_customerName == null)
+		{
+			_сustomers = await Customer.GetCustomers();
+			ThisCustomer = await Customer.GetById(id);
+			_model.Name = ThisCustomer.CustomerName;
+			_model.IsDebtor = ThisCustomer.IsDebtor;
+		}
+	}
+
+	private FormModel _model = new();
+	private void ProcessValidForm()
+	{
+		Logger.LogWarning("Before: {ThreadId}", Environment.CurrentManagedThreadId.ToString());
+		ThisCustomer.CustomerName = _model.Name;
+		ThisCustomer.IsDebtor = _model.IsDebtor;
+		Customer.Update(ThisCustomer);
+		_message_text = "Изменения сохранены.";
+	}
+
+	private class FormModel
+	{
+		[Required(ErrorMessage = "Необходимо заполнить название.")]
+		[MinLength(3, ErrorMessage = "Название должно содержать менее 3-х символов.")]
+		public string Name { get; set; }
+
+		[Required(ErrorMessage = "Необходимо выбрать статус.")]
+		public bool IsDebtor { get; set; }
+	}
+
+	private void RefreshMessageText()
+	{
+		_message_text = "";
+	}
+}

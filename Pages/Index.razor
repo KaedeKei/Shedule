@@ -1,0 +1,66 @@
+﻿@page "/"
+@using AltairCA.Blazor.WebAssembly.Cookie
+@using Shedule.Data
+@using System.ComponentModel.DataAnnotations
+@using Shedule.Models
+@using System.Globalization
+@using Shedule.Services
+
+
+<PageTitle>Index</PageTitle>
+
+@inject IManager ThisManager
+@inject ICookie cookie
+@inject NavigationManager NavigationManager
+@inject ILogger<Index> Logger
+
+<div>
+	<h1>Авторизация</h1>
+	<table class="table">
+		<tr><td>Имя:</td><td><InputText @bind-Value="_userName" @onclick="RefreshMessageText" /></td></tr>
+		<tr><td>Пароль:</td><td><InputText @bind-Value="_userPassword" @onclick="RefreshMessageText" /></td></tr>
+		<div>@_message_text</div>
+		<tr><button @onclick="Authorize">Авторизоваться </button></tr>
+	</table>
+</div>
+
+
+@code {
+	private IReadOnlyCollection<Manager>? _managers;
+	private Manager? User;
+	private string? CoockieUserName;
+	private string _userName;
+	private string _userPassword;
+	private string _message_text;
+	private bool _hideEnter;
+
+	protected override async Task OnInitializedAsync()
+	{
+
+		Logger.LogWarning("Before: {ThreadId}", Environment.CurrentManagedThreadId.ToString()); 
+		_managers = await ThisManager.GetActiveManagers();
+		_hideEnter = true;
+	}
+
+	private async Task Authorize()
+	{
+		Logger.LogWarning("Before: {ThreadId}", Environment.CurrentManagedThreadId.ToString());
+		User = await ThisManager.GetAuthorize(_userName, _userPassword);
+		if (User == null)
+		{
+			_message_text = "такой пользователь не найден";
+		}
+		else
+		{
+			await cookie.SetValue("managersName", User.ManagerName);
+			_message_text = "Вы авторизованы";
+			_hideEnter = false;
+			NavigationManager.NavigateTo("points");
+		}
+	}
+
+	private void RefreshMessageText()
+	{
+		_message_text = "";
+	}
+}

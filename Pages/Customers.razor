@@ -1,0 +1,181 @@
+﻿@page "/customers"
+@using Shedule.Data
+@using System.ComponentModel.DataAnnotations
+@using Shedule.Models
+@using Shedule.Services
+
+<PageTitle>Customers</PageTitle>
+
+@inject ICustomer Customer
+@inject ICookie cookie
+@inject NavigationManager NavigationManager
+@inject ILogger<Index> Logger
+
+<div>
+	<table class="table">
+		<tr>
+			<th><a href="managers">Менеджеры</a></th>
+			<th><a href="customers">Покупатели</a></th>
+			<th><a href="deliveryPoints">Торговые точки</a></th>
+			<th><a href="points">Расписание</a></th>
+			<th><button @onclick="Exit">Выйти </button></th>
+		</tr>
+	</table>
+</div>
+
+<hr />
+
+<h2>Список покупателей</h2>
+
+<hr />
+
+<button @onclick="@Toggle">Добавление нового покупателя</button>
+
+<div hidden="@HideTable">
+	<EditForm Model="_model" OnValidSubmit="ProcessValidForm">
+		<DataAnnotationsValidator />
+
+		<table border="0" cellpadding="10">
+			<tr><td>Название:</td><td><InputText @bind-Value="_model.Name" @onclick="RefreshMessageText" /></td></tr>
+		</table>
+		<div class="add_customer_div">@_message_text</div>
+
+		<br /> <input type="submit" value="Сохранить">
+		<ValidationSummary />
+	</EditForm>
+</div>
+
+<hr />
+
+<tr><td><InputText @bind-Value="_customerName" /></td><td><button @onclick="Search">Поиск</button></td></tr>
+
+<table class="table">
+	<thead>
+		<tr><th>Название</th><th>ПДЗ</th><th></th></tr>
+	</thead>
+	<tbody>
+
+		@if (_сustomers == null)
+		{
+			<p>Загрузка...</p>
+		}
+		else if (_сustomers.Count == 0)
+		{
+			<p>Нет Компаний</p>
+		}
+		else
+		{
+			@foreach (var company in @_сustomers)
+			{
+				<tr>
+					<td>@company.CustomerName</td>
+					<td>
+						@if (@company.IsDebtor == true)
+						{
+							<p>задолженность</p>
+						}
+						else
+						{
+							<p>задолженности нет</p>
+						}
+					</td>
+					<td>
+						<a href="edittingcustomer?id=@company.Id">редактировать</a>
+					</td>
+				</tr>
+			}
+		}
+	</tbody>
+</table>
+
+<hr>
+
+
+@code {
+	private IReadOnlyCollection<Customer>? _сustomers;
+	private IReadOnlyCollection<Customer>? _sсustomers;
+	private string _customerName;
+	private string _message_text;
+	private bool HideTable;
+
+	protected override async Task OnInitializedAsync()
+	{
+		try
+		{
+			Logger.LogWarning("Before: {ThreadId}", Environment.CurrentManagedThreadId.ToString());
+
+			if (_customerName == null)
+			{
+				_сustomers = await Customer.GetCustomers();
+			}
+			HideTable = true;
+		}
+		catch (Exception ex)
+		{
+
+		}		
+	}
+
+	public async Task Search()
+	{
+		if (_customerName == null || _customerName == "")
+		{
+			_сustomers = await Customer.GetCustomers();
+		}
+		else
+		{
+			_sсustomers = await Customer.GetSCustomers(_customerName);
+			if (_sсustomers == null)
+			{
+				_сustomers = null;
+			}
+
+			else
+			{
+				_сustomers = _sсustomers;
+			}
+		}
+	}
+
+	private FormModel _model = new();
+	private async Task ProcessValidForm()
+	{
+		Logger.LogWarning("Before: {ThreadId}", Environment.CurrentManagedThreadId.ToString());
+		Customer? selectedCustomer = await Customer.GetByName(_model.Name);
+		if (selectedCustomer == null)
+		{
+			Customer _customer = new Customer(_model.Name, false);
+			await Customer.AddCustomer(_customer);
+			_message_text = "Покупатель \"" + _model.Name + "\" был успешно сохранен.";
+			_model = new();
+			_сustomers = await Customer.GetCustomers();
+		}
+		else
+		{
+			_message_text = "Покупатель \"" + _model.Name + "\" не был добавден, т.к. такое имя уже существует.";
+		}
+	}
+
+	private class FormModel
+	{
+		[Required(ErrorMessage = "Необходимо заполнить название.")]
+		[MinLength(3, ErrorMessage = "Название должно содержать менее 3-х символов.")]
+		public string Name { get; set; }
+	}
+
+	private void RefreshMessageText()
+	{
+		_message_text = "";
+	}
+
+	private void Toggle()
+	{
+		HideTable = !HideTable;
+	}
+
+	private async Task Exit()
+	{
+		await cookie.SetValue("managersName", "");
+		NavigationManager.NavigateTo("");
+	}
+}

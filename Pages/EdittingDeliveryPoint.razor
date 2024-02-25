@@ -1,0 +1,151 @@
+﻿@page "/edittingdeliverypoint"
+@using Shedule.Data
+@using System.ComponentModel.DataAnnotations
+@using Shedule.Models
+@using System.Globalization
+
+
+<PageTitle>DeliveryPoints</PageTitle>
+
+@inject ICustomer ThisCustomer
+@inject IManager ThisManager
+@inject IDeliveryPoint ThisDeliveryPoint
+@inject Week ThisWeek
+@inject ILogger<Index> Logger
+
+
+<EditForm Model="_model" OnValidSubmit="ProcessValidForm">
+	<DataAnnotationsValidator />
+
+	<tr><td>Название:</td><td><InputText @bind-Value="_model.Name" @onclick="RefreshMessageText" /></td></tr>
+	<tr><td>Адрес:</td><td><InputText @bind-Value="_model.Adress" @onclick="RefreshMessageText" /></td></tr>
+	<tr>
+		<td>День доставки:</td>
+		<td>
+			<InputSelect @bind-Value="_model.DeliveryDay" class="form-control">
+				<option value="@ThisWeek.Monday">@CultureInfo.GetCultureInfo("ru-RU").DateTimeFormat.GetDayName(ThisWeek.Monday.DayOfWeek)</option>
+				<option value="@ThisWeek.Tuesday">@CultureInfo.GetCultureInfo("ru-RU").DateTimeFormat.GetDayName(ThisWeek.Tuesday.DayOfWeek)</option>
+				<option value="@ThisWeek.Wednesday">@CultureInfo.GetCultureInfo("ru-RU").DateTimeFormat.GetDayName(ThisWeek.Wednesday.DayOfWeek)</option>
+				<option value="@ThisWeek.Thursday">@CultureInfo.GetCultureInfo("ru-RU").DateTimeFormat.GetDayName(ThisWeek.Thursday.DayOfWeek)</option>
+				<option value="@ThisWeek.Friday">@CultureInfo.GetCultureInfo("ru-RU").DateTimeFormat.GetDayName(ThisWeek.Friday.DayOfWeek)</option>
+			</InputSelect>
+		</td>
+	</tr>
+
+	<tr>
+		<td>Покупатель:</td>
+		<td>
+			<InputSelect @bind-Value="_model.CustomerId" class="form-control">
+				@foreach (var customer in _сustomers)
+				{
+					<option value="@customer.Id">@customer.CustomerName</option>
+				}
+			</InputSelect>
+		</td>
+	</tr>
+
+	<tr>
+		<td>Менеджер:</td>
+		<td>
+			<InputSelect @bind-Value="_model.ManagerId" class="form-control">
+				@foreach (var manager in _managers)
+				{
+					<option value="@manager.Id">@manager.ManagerName</option>
+				}
+			</InputSelect>
+		</td>
+	</tr>
+
+	<tr>
+		<td>Статус:</td>
+		<td>
+			<InputSelect @bind-Value="_model.IsEnable" class="form-control">
+				<option value="true">активен</option>
+				<option value="false">неактивен</option>
+			</InputSelect>
+		</td>
+	</tr>
+
+	<tr><td rowspan="5"><p class="add_point_div">@_message_text</p></td><td></td></tr>
+
+	<br /> <input type="submit" value="Сохранить">
+	<ValidationSummary />
+</EditForm>
+
+<hr />
+
+<a href="deliveryPoints">Вернуться к списку</a>
+
+
+@code {
+	[Parameter]
+	[SupplyParameterFromQuery]
+	public int id { get; set; }
+
+	private IReadOnlyCollection<DeliveryPoint>? _points;
+	private IReadOnlyCollection<Manager> _managers;
+	private IReadOnlyCollection<Customer> _сustomers;
+	private DeliveryPoint ThisPoint;
+	private string _message_text;
+
+	protected override async Task OnInitializedAsync()
+	{
+		
+		Logger.LogWarning("Before: {ThreadId}", Environment.CurrentManagedThreadId.ToString()); 
+		ThisPoint = await ThisDeliveryPoint.GetById(id);
+		_model.Name = ThisPoint.PointName;
+		_model.Adress = ThisPoint.Adress;
+		_model.CustomerId = ThisPoint.ThisCustomer.Id;
+		_model.ManagerId = ThisPoint.ThisManager.Id;
+		_model.DeliveryDay = ThisPoint.DeliveryDay;
+		_model.IsEnable = ThisPoint.IsEnable;
+		_points = await ThisDeliveryPoint.GetDeliveryPoints();
+		_managers = await ThisManager.GetActiveManagers();
+		_сustomers = await ThisCustomer.GetCustomers();
+	}
+
+	private FormModel _model = new();
+	private async Task ProcessValidForm()
+	{
+		Logger.LogWarning("Before: {ThreadId}", Environment.CurrentManagedThreadId.ToString());
+		Customer _Customer = await ThisCustomer.GetById(_model.CustomerId);
+		Manager _Manager = await ThisManager.GetById(_model.ManagerId);
+
+		ThisPoint.PointName = _model.Name;
+		ThisPoint.Adress = _model.Adress;
+		ThisPoint.ThisCustomer = _Customer;
+		ThisPoint.ThisManager = _Manager;
+		ThisPoint.DeliveryDay = _model.DeliveryDay;
+		ThisPoint.IsEnable = _model.IsEnable;
+		await ThisDeliveryPoint.Update(ThisPoint);
+		_message_text = "Изменения сохранены.";
+	}
+
+	private class FormModel
+	{
+		[Required(ErrorMessage = "Необходимо заполнить имя.")]
+		[MinLength(3, ErrorMessage = "Имя должно содержать менее 3-х символов.")]
+		public string Name { get; set; }
+
+		[Required(ErrorMessage = "Необходимо заполнить адрес.")]
+		[MinLength(3, ErrorMessage = "Адрес должен содержать менее 3-х символов.")]
+		public string Adress { get; set; }
+
+		[Required(ErrorMessage = "Необходимо выбрать Покупателя.")]
+		public int CustomerId { get; set; }
+
+		[Required(ErrorMessage = "Необходимо выбрать менеджера.")]
+		public int ManagerId { get; set; }
+
+		[Required(ErrorMessage = "Необходимо выбрать день доставки.")]
+		public DateTime DeliveryDay { get; set; }
+
+		[Required(ErrorMessage = "Необходимо выбрать статус.")]
+		public bool IsEnable { get; set; }
+	}
+
+	private void RefreshMessageText()
+	{
+		_message_text = "";
+	}
+}

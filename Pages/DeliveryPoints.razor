@@ -1,0 +1,245 @@
+﻿@page "/deliveryPoints"
+@using Shedule.Data
+@using System.ComponentModel.DataAnnotations
+@using Shedule.Models
+@using System.Globalization
+@using Shedule.Services
+
+
+<PageTitle>DeliveryPoints</PageTitle>
+
+@inject ICustomer ThisCustomer
+@inject IManager ThisManager
+@inject IDeliveryPoint ThisDeliveryPoint
+@inject Week ThisWeek
+@inject ICookie cookie
+@inject NavigationManager NavigationManager
+@inject ILogger<Index> Logger
+
+<div>
+	<table class="table">
+		<tr>
+			<th><a href="managers">Менеджеры</a></th>
+			<th><a href="customers">Покупатели</a></th>
+			<th><a href="deliveryPoints">Торговые точки</a></th>
+			<th><a href="points">Расписание</a></th>
+			<th><button @onclick="Exit">Выйти </button></th>
+		</tr>
+	</table>
+</div>
+
+<hr />
+
+<h2>Список торговых точек</h2>
+
+<hr />
+
+<button @onclick="@Toggle">Добавление новой ТТ</button>
+
+<div hidden="@HideTable">
+	<EditForm Model="_model" OnValidSubmit="ProcessValidForm">
+		<DataAnnotationsValidator />
+
+		<tr><td>Название:</td><td><InputText @bind-Value="_model._Name" @onclick="RefreshMessageText" /></td></tr>
+		<tr><td>Адрес:</td><td><InputText @bind-Value="_model._Adress" @onclick="RefreshMessageText" /></td></tr>
+		<tr>
+			<td>День доставки:</td>
+			<td>
+				<InputSelect @bind-Value="_model._DeliveryDay" class="form-control">
+					<option value="@ThisWeek.Tuesday">@CultureInfo.GetCultureInfo("ru-RU").DateTimeFormat.GetDayName(ThisWeek.Tuesday.DayOfWeek)</option>
+					<option value="@ThisWeek.Wednesday">@CultureInfo.GetCultureInfo("ru-RU").DateTimeFormat.GetDayName(ThisWeek.Wednesday.DayOfWeek)</option>
+					<option value="@ThisWeek.Thursday">@CultureInfo.GetCultureInfo("ru-RU").DateTimeFormat.GetDayName(ThisWeek.Thursday.DayOfWeek)</option>
+					<option value="@ThisWeek.Friday">@CultureInfo.GetCultureInfo("ru-RU").DateTimeFormat.GetDayName(ThisWeek.Friday.DayOfWeek)</option>
+				</InputSelect>
+			</td>
+		</tr>
+
+		<tr>
+			<td>Покупатель:</td>
+			<td>
+				<InputSelect @bind-Value="_model._CustomerId" class="form-control">
+					@foreach (var customer in _сustomers)
+					{
+						<option value="@customer.Id">@customer.CustomerName</option>
+					}
+				</InputSelect>
+			</td>
+		</tr>
+
+		<tr>
+			<td>Менеджер:</td>
+			<td>
+				<InputSelect @bind-Value="_model._ManagerId" class="form-control">
+					@foreach (var manager in _managers)
+					{
+						<option value="@manager.Id">@manager.ManagerName</option>
+					}
+				</InputSelect>
+			</td>
+		</tr>
+
+		<tr><td rowspan="5"><p class="add_point_div">@_message_text</p></td><td></td></tr>
+
+		<br /> <input type="submit" value="Сохранить">
+		<ValidationSummary />
+	</EditForm>
+</div>
+
+<hr />
+
+<tr>
+	<td><InputText @bind-Value="_pointName" /></td>
+	<td>
+		<button @onclick="Search">
+			Поиск
+		</button>
+	</td>
+</tr>
+
+<hr />
+
+<table class="table">
+	<thead>
+		<tr><th>Покупатель</th><th>Название</th><th>Адрес</th><th>Менеджер</th><th>День доставки</th><th>Статус</th><th</th></tr>
+	</thead>
+	<tbody>
+		@if (_points == null)
+		{
+			<p>Загрузка...</p>
+		}
+		else if (_points.Count == 0)
+		{
+			<p>Нет Компаний</p>
+		}
+		else
+		{
+			@foreach (var point in @_points)
+			{
+				<tr>
+					<td>@point.ThisCustomer</td>
+					<td>@point.PointName</td>
+					<td>@point.Adress</td>
+					<td>@point.ThisManager </td>
+					<td>@CultureInfo.GetCultureInfo("ru-RU").DateTimeFormat.GetDayName(@point.DeliveryDay.DayOfWeek)</td>
+					<td>
+						@if (@point.IsEnable == true)
+						{
+							<p>действующая</p>
+						}
+						else
+						{
+							<p>неактивна</p>
+						}
+					</td>
+					<td>
+						<a href="edittingdeliverypoint?id=@point.Id">редактировать</a>
+					</td>
+				</tr>
+			}
+		}
+	</tbody>
+</table>
+
+
+@code {
+	private IReadOnlyCollection<DeliveryPoint>? _points;
+	private IReadOnlyCollection<DeliveryPoint>? _spoints;
+	private IReadOnlyCollection<Manager>? _managers;
+	private IReadOnlyCollection<Customer>? _сustomers;
+	private string _pointName;
+
+	private string _message_text;
+	private bool HideTable;
+
+
+	protected override async Task OnInitializedAsync()
+	{
+		try
+		{
+			Logger.LogWarning("Before: {ThreadId}", Environment.CurrentManagedThreadId.ToString());
+
+			if (_pointName == null)
+			{
+				_points = await ThisDeliveryPoint.GetDeliveryPoints();
+			}
+			_managers = await ThisManager.GetActiveManagers();
+			_сustomers = await ThisCustomer.GetCustomers();
+			HideTable = true;
+		}
+		catch (Exception ex)
+		{
+
+		}		
+	}
+
+	private async Task Search()
+	{
+		Logger.LogWarning("Before: {ThreadId}", Environment.CurrentManagedThreadId.ToString());
+		if (_pointName == null || _pointName == "")
+		{
+			_points = await ThisDeliveryPoint.GetDeliveryPoints();
+		}
+		else
+		{
+			_spoints = await ThisDeliveryPoint.GetSDeliveryPoints(_pointName);
+			_points = _spoints;
+		}
+	}
+
+	private FormModel _model = new();
+	private async Task ProcessValidForm()
+	{
+		Logger.LogWarning("Before: {ThreadId}", Environment.CurrentManagedThreadId.ToString());
+		DeliveryPoint? selectedPoint = await ThisDeliveryPoint.GetByName(_model._Name);
+		if (selectedPoint == null)
+		{
+			Customer _Customer = await ThisCustomer.GetById(_model._CustomerId);
+			Manager _Manager = await ThisManager.GetById(_model._ManagerId);
+			DeliveryPoint _point = new DeliveryPoint(_model._Name, _model._Adress, _Customer, _Manager, _model._DeliveryDay, true);
+			await ThisDeliveryPoint.AddDeliveryPoint(_point);
+			_message_text = "Точка " + _model._Name + " была успешно сохранена.";
+			_model = new();
+			_points = await ThisDeliveryPoint.GetDeliveryPoints();
+		}
+		else
+		{
+			_message_text = "Точка " + _model._Name + " не была добавлена, т.к. такое имя уже есть.";
+		}
+	}
+
+	private class FormModel
+	{
+		[Required(ErrorMessage = "Необходимо заполнить имя.")]
+		[MinLength(3, ErrorMessage = "Имя должно содержать менее 3-х символов.")]
+		public string _Name { get; set; }
+
+		[Required(ErrorMessage = "Необходимо заполнить адрес.")]
+		[MinLength(3, ErrorMessage = "Адрес должен содержать менее 3-х символов.")]
+		public string _Adress { get; set; }
+
+		[Required(ErrorMessage = "Необходимо выбрать Покупателя.")]
+		public int _CustomerId { get; set; }
+
+		[Required(ErrorMessage = "Необходимо выбрать менеджера.")]
+		public int _ManagerId { get; set; }
+
+		[Required(ErrorMessage = "Необходимо выбрать день доставки.")]
+		public DateTime _DeliveryDay { get; set; }
+	}
+
+	private void RefreshMessageText()
+	{
+		_message_text = "";
+	}
+
+	private void Toggle()
+	{
+		HideTable = !HideTable;
+	}
+
+	private async Task Exit()
+	{
+		await cookie.SetValue("managersName", "");
+		NavigationManager.NavigateTo("");
+	}
+}

@@ -1,0 +1,281 @@
+﻿@page "/points"
+@using AltairCA.Blazor.WebAssembly.Cookie
+@using Shedule.Data
+@using System.ComponentModel.DataAnnotations
+@using Shedule.Models
+@using System.Globalization
+@using Shedule.Services
+
+
+<PageTitle>Index</PageTitle>
+
+@inject ICustomer ThisCustomer
+@inject IManager ThisManager
+@inject IDeliveryPoint ThisDeliveryPoint
+@inject IDeliveryEvent ThisDeliveryEvent
+@inject UsersStatus UserStatus
+@inject ICookie cookie
+@inject NavigationManager NavigationManager
+@inject ILogger<Index> Logger
+@inject IHostEnvironment HostEnvironment
+
+<div>
+	<button @onclick="Exit">Выйти </button>
+</div>
+
+<hr />
+
+<div hidden ="@HideAll">
+	<div hidden="@HideMenu">
+		<table class="table">
+			<tr><th><a href="managers">Менеджеры</a></th><th><a href="customers">Покупатели</a></th><th><a href="deliveryPoints">Торговые точки</a></th><th><a href="points">Расписание</a></th></tr>
+		</table>
+	</div>
+
+	<hr />
+
+	<div hidden="@HideTable">
+		<table class="table">
+			<tbody>
+				<tr>
+					<th>
+						<InputSelect @bind-Value="_selectedManagersId" class="form-control" @onclick="GetPoints" hidden="@HideEdit">
+							@foreach (var manager in _managers)
+							{
+								<option value="@manager.Id">@manager.ManagerName</option>
+							}
+						</InputSelect>
+					</th>
+					<th>
+						<InputDate @bind-Value="_selectedDate" class="form-control" @onfocusout="GetPoints"></InputDate>
+					</th>
+				</tr>
+			</tbody>
+		</table>
+
+		<hr />
+
+		<table class="table">
+			<thead>
+				<tr><th>Название</th><th>Покупатель</th><th>ПДЗ</th><th>Адрес</th><th>Статус</th><th></th></tr>
+			</thead>
+			<tbody>
+				@if (_points == null)
+				{ }
+
+				else if (_points.Count == 0)
+				{ }
+
+				else
+				{
+					@foreach (var point in @_points)
+					{
+						@if (point.ThisCustomer.IsDebtor == true)
+						{
+							color = "red";
+						}
+						else
+						{
+							color = "black";
+						}
+						<tr class="@color">
+							<td>@point.PointName</td>
+							<td>@point.ThisCustomer</td>
+							<td>
+								@if (point.ThisCustomer.IsDebtor == true)
+								{
+									<p>есть</p>
+								}
+								else
+								{
+									<p>нет</p>
+								}
+							</td>
+							<td>@point.Adress</td>
+							<td>
+								<InputSelect @bind-Value="_eventSubscription" class="form-control">
+									<option value="0,false">не назначено</option>
+									<option value="@point.Id,false">нет заявки</option>
+									<option value="@point.Id,true">есть заявка</option>
+								</InputSelect>
+							</td>
+							<td><button @onclick="AddEvent"> сохранить и добавить в календарь </button></td>
+						</tr>
+					}
+				}
+			</tbody>
+		</table>
+
+		<hr />
+
+		<table class="table">
+			<thead>
+				<tr><th>Название</th><th>Покупатель</th><th>Адрес</th><th>День доставки</th><th>Статус доставки</th><th></th><th></th></tr>
+			</thead>
+			<tbody>
+				@foreach (var item in @_events)
+				{
+					<tr>
+						<td>@item.EventPoint.PointName</td>
+						<td>@item.EventPoint.ThisCustomer.CustomerName</td>
+						<td>@item.EventPoint.Adress</td>
+						<td>@item.EventDeliveryDate.ToString("dd MMMM yyyyг.")</td>
+						<td>
+							@if (@item.IsDone == true)
+							{
+								<p>доставлена</p>
+							}
+							else
+							{
+								<p class="red">не доставлена</p>
+							}
+						</td>
+						<td>
+							<a href="edittingEvent?id=@item.Id">изменить</a>
+						</td>
+						<td>
+							<a href="edittingEventManager?id=@item.Id" hidden="@HideEdit">изменить менеджера</a>
+						</td>
+					</tr>
+				}
+			</tbody>
+		</table>
+
+	</div>
+</div>
+
+
+@code {
+	private IReadOnlyCollection<DeliveryPoint>? _points;
+	private IReadOnlyCollection<DeliveryEvent>? _events;
+	private IReadOnlyCollection<DeliveryEvent>? _eventsByDayAndManager;
+	private IReadOnlyCollection<Manager>? _managers;
+	private IReadOnlyCollection<Customer>? _сustomers;
+	private Manager? _selectedManager;
+	private int _selectedManagersId;
+	private DateTime _selectedDate;
+	private DateTime _orderDate;
+	private string _eventStatus;
+	private int _pointId;
+	private string _eventSubscription;
+	private string color;
+
+	private Manager? User;
+	private string? CoockieUserName;
+	private bool HideMenu;
+	private bool HideTable;
+	private bool HideEdit;
+	private bool HideAll;
+
+	protected override async Task OnInitializedAsync()
+	{
+		try
+		{
+			Logger.LogWarning("Before: {ThreadId}", Environment.CurrentManagedThreadId.ToString());
+			_managers = await ThisManager.GetActiveManagers();
+			_сustomers = await ThisCustomer.GetCustomers();
+			_selectedDate = DateTime.Today;
+			_selectedManagersId = 1;
+			_orderDate = _selectedDate.AddDays(1);
+			_points = await ThisDeliveryPoint.GetDeliveryPointsByDayAndManagersId(_selectedManagersId, _orderDate);
+			_events = await ThisDeliveryEvent.GetActiveByDateAndManager(_selectedDate, _selectedManagersId);
+			_eventSubscription = "0,false";
+			CoockieUserName = await cookie.GetValue("managersName");
+			User = await ThisManager.GetByName(CoockieUserName);
+			if (User.ManagerStatus == UserStatus.Supervisor && User.IsEnable == true)
+			{
+				HideTable = false;
+				HideMenu = true;
+				HideEdit = false;
+			}
+			else if (User.ManagerStatus == UserStatus.Admin)
+			{
+				HideTable = false;
+				HideMenu = false;
+				HideEdit = false;
+			}
+
+			else if (User.ManagerStatus == UserStatus.User && User.IsEnable == true)
+			{
+				HideTable = false;
+				HideMenu = true;
+				HideEdit = true;
+				_selectedManagersId = User.Id;
+			}
+
+			else if (User.ManagerStatus == UserStatus.User && User.IsEnable == false)
+			{
+				HideAll = true;
+			}
+		}
+		catch (Exception ex)
+		{
+
+		}
+
+	}
+
+	private async Task GetPoints()
+	{		
+		Logger.LogWarning("Before: {ThreadId}", Environment.CurrentManagedThreadId.ToString());
+		_selectedManager = await ThisManager.GetById(_selectedManagersId);
+		_orderDate = _selectedDate.AddDays(1);
+		_points = await ThisDeliveryPoint.GetDeliveryPointsByDayAndManagersId(_selectedManagersId, _orderDate);
+		_events = await ThisDeliveryEvent.GetActiveByDateAndManager(_selectedDate, _selectedManagersId);
+		_eventSubscription = "0,false";
+	}
+
+	private async Task AddEvent()
+	{
+		Logger.LogWarning("Before: {ThreadId}", Environment.CurrentManagedThreadId.ToString());
+		DateTime eventsDate = _selectedDate.AddDays(1);
+		string[] items = _eventSubscription.Split(',');
+		_pointId = Convert.ToInt32(items[0]);
+		_eventStatus = items[1];
+
+		if (_pointId == 0)
+		{
+			
+		}
+
+		else
+		{
+			IReadOnlyCollection<DeliveryEvent>? myEvent = await ThisDeliveryEvent.GetByDateAndPoint(_orderDate, _pointId);
+
+			if (myEvent.Count == 0)
+			{
+				DeliveryPoint eventPoint = await ThisDeliveryPoint.GetById(_pointId);
+				Manager eventManager = await ThisManager.GetById(_selectedManagersId);
+				DeliveryEvent newEvent = new DeliveryEvent(eventPoint, _orderDate, true, false);
+				await ThisDeliveryEvent.AddEvent(newEvent);
+			}
+
+			else
+			{
+				if (items[1] == "false")
+				{
+					foreach (var item in myEvent)
+					{
+						item.IsRelevant = false;
+						await ThisDeliveryEvent.Update(item);
+					}
+				}
+				else
+				{
+					foreach (var item in myEvent)
+					{
+						item.IsRelevant = true;
+						await ThisDeliveryEvent.Update(item);
+					}
+				}
+			}
+		}		
+	}
+
+	private async Task Exit()
+	{
+		User = null;
+		await cookie.SetValue("managersName", "");
+		NavigationManager.NavigateTo("");
+	}
+}
